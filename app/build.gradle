@@ -22,6 +22,18 @@ dependencies {
 
     // This dependency is used by the application.
     implementation 'com.google.guava:guava:31.1-jre'
+
+    // SwingX
+    implementation 'org.swinglabs:swingx:1.6.1'
+
+    // Appdirs
+    implementation 'net.harawata:appdirs:1.2.1'
+
+    // Mammoth (docx to html)
+    implementation 'org.zwobble.mammoth:mammoth:1.5.0'
+
+    // Freemarker (template engine)
+    implementation 'org.freemarker:freemarker:2.3.32'
 }
 
 // Apply a specific Java toolchain to ease working on different environments.

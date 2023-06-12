@@ -1,0 +1,13 @@
+---
+layout: base.njk
+---
+
+<div class="page">
+  <span class="card-title times" style="font-weight: 500;">{{ title }}</span>
+  <div class="card-meta">
+    <span class="card-author">{{ author }}</span>&nbsp;/&nbsp;
+    <span class="card-date">{{ date.toUTCString().substring(0, 17) }}</span>
+  </div>
+
+  {{ content | safe }}
+</div>
