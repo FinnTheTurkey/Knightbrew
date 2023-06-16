@@ -59,12 +59,10 @@
             <div class="navbar-bottom" hidden>
                 <ul class="topic-list">
                     <#list sections as sec>
-			  <#if id != "all">
-			    <li class="list-style">
-			      <a class="nav-link <#if sec.slug == "section"> active </#if> "< href="/section/${sec.slug}">${sec.deslug}</a>
-			    </li>
-			  </#if>
-			</#list>
+                        <li class="list-style">
+                            <a class="nav-link <#if sec.slug == " section"> active </#if>" href="/section/${sec.slug}">${sec.deslug}</a>
+                        </li>
+                    </#list>
                 </ul>
             </div>
             <div class="timer" id="timer">

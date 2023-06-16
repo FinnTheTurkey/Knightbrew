@@ -57,10 +57,10 @@ public class App extends JPanel implements ActionListener
         archiveFile = new FileBrowse("Archive folder", BrowseType.Directory);
         step1.add(archiveFile);
         introFile = new FileBrowse("Intro heading document", BrowseType.Directory);
-        step1.add(introFile);
+        // step1.add(introFile);
 
         aboutFile = new FileBrowse("About page document", BrowseType.Directory);
-        step1.add(aboutFile);
+        // step1.add(aboutFile);
 
         add(step1);
 
@@ -107,7 +107,7 @@ public class App extends JPanel implements ActionListener
         b4.setActionCommand("clean");
         bl = new JPanel(new BorderLayout());
         bl.add(b4);
-        step3.add(b4);
+        step3.add(bl);
 
         b2 = new JButton("Test");
         b2.addActionListener(this);

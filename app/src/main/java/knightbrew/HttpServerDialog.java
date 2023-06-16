@@ -10,6 +10,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
 import javax.swing.*;
 import net.harawata.appdirs.AppDirs;
 import net.harawata.appdirs.AppDirsFactory;
@@ -17,13 +19,14 @@ import net.harawata.appdirs.AppDirsFactory;
 public class HttpServerDialog extends JDialog
 {
     private JButton startButton;
+    private JLabel directoryLabel;
+    boolean serverRunning = false;
 
     public HttpServerDialog(Frame parent)
     {
         super(parent, "HTTP Server Configuration", true);
 
-        // Create components
-        JLabel directoryLabel = new JLabel("Directory:");
+        directoryLabel = new JLabel("Directory:");
         startButton = new JButton("Start Server");
 
         // Add components to the dialog
@@ -36,11 +39,37 @@ public class HttpServerDialog extends JDialog
         startButton.addActionListener(new ActionListener() {
             @Override public void actionPerformed(ActionEvent e)
             {
+                if (serverRunning == false)
+                {
+                    AppDirs appDirs = AppDirsFactory.getInstance();
+                    String path = appDirs.getUserDataDir("Knightbrew", null, "Knightwatch");
+                    String directory = path + File.separator + "Source";
 
-                AppDirs appDirs = AppDirsFactory.getInstance();
-                String path = appDirs.getUserDataDir("Knightbrew", null, "Knightwatch");
-                String directory = path + File.separator + "Source";
-                startHttpServer(directory);
+                    directoryLabel.setText("Serving Knightwatch at http://0.0.0.0:8080...");
+                    startHttpServer(directory);
+                    startButton.setText("Click to open homepage");
+                }
+
+                // Create a URI object with the webpage address
+                URI webpage;
+                try
+                {
+                    webpage = new URI("http://0.0.0.0:8080");
+
+                    // Get the desktop instance
+                    Desktop desktop = Desktop.getDesktop();
+
+                    // Check if the desktop supports the browse action
+                    if (desktop.isSupported(Desktop.Action.BROWSE))
+                    {
+                        // Browse the webpage
+                        desktop.browse(webpage);
+                    }
+                }
+                catch (Exception e1)
+                {
+                    e1.printStackTrace();
+                }
             }
         });
 
@@ -60,6 +89,11 @@ public class HttpServerDialog extends JDialog
                 {
                     String requestPath = exchange.getRequestURI().getPath();
                     File file = new File(directory + requestPath);
+
+                    if (file.isDirectory())
+                    {
+                        file = new File(directory + requestPath + "/index.html");
+                    }
 
                     if (file.exists() && file.isFile())
                     {
@@ -88,6 +122,7 @@ public class HttpServerDialog extends JDialog
             });
             server.setExecutor(null);
             server.start();
+            serverRunning = true;
             JOptionPane.showMessageDialog(this, "HTTP Server started successfully. You can now close this dialog.");
         }
         catch (IOException e)

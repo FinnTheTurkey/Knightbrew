@@ -7,10 +7,11 @@ import java.io.IOException;
 import java.util.Date;
 import java.util.prefs.Preferences;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
+// import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import net.harawata.appdirs.AppDirs;
 import net.harawata.appdirs.AppDirsFactory;
+import net.lingala.zip4j.ZipFile;
 
 class UnzipStep implements MajorStep
 {
@@ -43,6 +44,8 @@ class UnzipStep implements MajorStep
         // Caching
         Preferences prefs = Preferences.userNodeForPackage(UnzipStep.class);
 
+        f.setProgress(0);
+
         p = new File(archive);
         if (p.exists())
         {
@@ -65,7 +68,7 @@ class UnzipStep implements MajorStep
             {
                 // We have to do a full clean
                 File r = new File(path + File.separator + "Archive");
-                r.delete();
+                MammothStep.deleteDirectory(r);
                 r.mkdirs();
 
                 unzip(archive, path + File.separator + "Archive" + File.separator);
@@ -77,7 +80,14 @@ class UnzipStep implements MajorStep
         else
         {
             o.out("No archive; Skipping\n");
+
+            // So MammothStep doesn't accidentally load it
+            MammothStep.deleteDirectory(new File(path + File.separator + "Archive"));
+
+            new File(path + File.separator + "Archive").mkdirs();
         }
+
+        f.setProgress(50);
 
         p = new File(current);
         if (p.exists())
@@ -99,7 +109,7 @@ class UnzipStep implements MajorStep
             {
                 // We have to do a full clean
                 File r = new File(path + File.separator + "Latest");
-                r.delete();
+                MammothStep.deleteDirectory(r);
                 r.mkdirs();
 
                 unzip(current, path + File.separator + "Latest" + File.separator);
@@ -111,68 +121,89 @@ class UnzipStep implements MajorStep
         else
         {
             o.out("No archive; Skipping\n");
+
+            // So MammothStep doesn't accidentally load it
+            MammothStep.deleteDirectory(new File(path + File.separator + "Latest"));
+            new File(path + File.separator + "Latest").mkdirs();
         }
+
+        f.setProgress(100);
 
         return 0;
     }
 
-    // https://www.digitalocean.com/community/tutorials/java-unzip-file-example
-    private void unzip(String zipFilePath, String destDir)
+    private void unzip(String zip, String dest)
     {
-        // A buffer for reading and writing data
-        System.out.println(destDir);
+        o.out("Starting to unzip file " + zip + "\nThis may take a while...\n");
 
-        File dir = new File(destDir);
-        // create output directory if it doesn't exist
-        if (!dir.exists())
-            dir.mkdirs();
-
-        FileInputStream fis;
-        // buffer for read and write data to file
-        byte[] buffer = new byte[1024];
         try
         {
-            // Create a ZipFile object
-            ZipFile zipFile = new ZipFile(zipFilePath);
-
-            f.setProgress(0);
-            int count = 0;
-            int total = zipFile.size();
-
-            zipFile.close();
-
-            fis = new FileInputStream(zipFilePath);
-            ZipInputStream zis = new ZipInputStream(fis);
-            ZipEntry ze = zis.getNextEntry();
-            while (ze != null)
-            {
-                String fileName = ze.getName();
-                File newFile = new File(destDir + File.separator + fileName);
-                o.out("Unzipping " + newFile.getName() + "\n");
-                // create directories for sub directories in zip
-                new File(newFile.getParent()).mkdirs();
-                FileOutputStream fos = new FileOutputStream(newFile);
-                int len;
-                while ((len = zis.read(buffer)) > 0)
-                {
-                    fos.write(buffer, 0, len);
-                }
-                fos.close();
-                // close this ZipEntry
-                zis.closeEntry();
-                ze = zis.getNextEntry();
-
-                count++;
-                f.setProgress((int)(((double)count / (double)total) * 100));
-            }
-            // close last ZipEntry
-            zis.closeEntry();
-            zis.close();
-            fis.close();
+            new ZipFile(zip).extractAll(dest);
         }
-        catch (IOException e)
+        catch (Exception e)
         {
+            o.out("Failed to unzip file :(\n");
             e.printStackTrace();
         }
     }
+
+    // https://www.digitalocean.com/community/tutorials/java-unzip-file-example
+    // private void unzip_old(String zipFilePath, String destDir)
+    // {
+    //     // A buffer for reading and writing data
+    //     System.out.println("UNZIPPING " + zipFilePath + " TO " + destDir);
+
+    //     File dir = new File(destDir);
+    //     // create output directory if it doesn't exist
+    //     if (!dir.exists())
+    //         dir.mkdirs();
+
+    //     FileInputStream fis;
+    //     // buffer for read and write data to file
+    //     byte[] buffer = new byte[1024];
+    //     try
+    //     {
+    //         // Create a ZipFile object
+    //         ZipFile zipFile = new ZipFile(zipFilePath);
+
+    //         f.setProgress(0);
+    //         int count = 0;
+    //         int total = zipFile.size();
+
+    //         zipFile.close();
+
+    //         fis = new FileInputStream(zipFilePath);
+    //         ZipInputStream zis = new ZipInputStream(fis);
+    //         ZipEntry ze = zis.getNextEntry();
+    //         while (ze != null)
+    //         {
+    //             String fileName = ze.getName();
+    //             File newFile = new File(destDir + File.separator + fileName);
+    //             o.out("Unzipping " + newFile.getName() + "\n");
+    //             // create directories for sub directories in zip
+    //             new File(newFile.getParent()).mkdirs();
+    //             FileOutputStream fos = new FileOutputStream(newFile);
+    //             int len;
+    //             while ((len = zis.read(buffer)) > 0)
+    //             {
+    //                 fos.write(buffer, 0, len);
+    //             }
+    //             fos.close();
+    //             // close this ZipEntry
+    //             zis.closeEntry();
+    //             ze = zis.getNextEntry();
+
+    //             count++;
+    //             f.setProgress((int)(((double)count / (double)total) * 100));
+    //         }
+    //         // close last ZipEntry
+    //         zis.closeEntry();
+    //         zis.close();
+    //         fis.close();
+    //     }
+    //     catch (IOException e)
+    //     {
+    //         e.printStackTrace();
+    //     }
+    // }
 }

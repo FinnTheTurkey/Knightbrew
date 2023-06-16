@@ -34,6 +34,9 @@ dependencies {
 
     // Freemarker (template engine)
     implementation 'org.freemarker:freemarker:2.3.32'
+
+    // Zip4j (java's built in zip can die in a hole)
+    implementation 'net.lingala.zip4j:zip4j:2.11.5'
 }
 
 // Apply a specific Java toolchain to ease working on different environments.

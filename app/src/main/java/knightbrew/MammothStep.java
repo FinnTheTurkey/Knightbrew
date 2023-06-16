@@ -1,5 +1,7 @@
 package knightbrew;
 
+import java.awt.image.BufferedImage;
+import java.awt.image.ColorConvertOp;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -13,15 +15,25 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.text.Normalizer;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
-import java.util.Scanner;
-import java.util.Set;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.prefs.Preferences;
 import java.util.regex.Pattern;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 import net.harawata.appdirs.AppDirs;
 import net.harawata.appdirs.AppDirsFactory;
 import org.zwobble.mammoth.DocumentConverter;
@@ -40,6 +52,8 @@ class MammothStep implements MajorStep
 
     private ArrayList<String> sections;
 
+    private Map<String, ArrayList<HomeCard>> section_cards;
+
     @Override public String getName()
     {
         return "Converting to HTML...";
@@ -55,6 +69,7 @@ class MammothStep implements MajorStep
         this.o = o;
 
         sections = new ArrayList<String>();
+        section_cards = new HashMap<String, ArrayList<HomeCard>>();
 
         AppDirs appDirs = AppDirsFactory.getInstance();
         path = appDirs.getUserDataDir("Knightbrew", null, "Knightwatch");
@@ -91,14 +106,36 @@ class MammothStep implements MajorStep
 
         // Recursively count # of files in Archive and Latest for the progress bar
         total_files += countFiles(new File(path + File.separator + "Archive"));
+
+        // If there are files in the archive, build it a section
+        if (total_files > 0)
+        {
+            sections.add("archive");
+        }
+
         total_files += countFiles(new File(path + File.separator + "Latest"));
 
-        // Do the archive
-        buildSection(new File(path + File.separator + "Archive"), "Archive");
-        sections.add("archive");
+        // Figure out which sections we have
 
         File latesst = new File(path + File.separator + "Latest");
         File latest = new File(path + File.separator + "Latest" + File.separator + latesst.list()[0]);
+
+        String[] lisst = latest.list();
+        Arrays.sort(lisst);
+        for (String section : lisst)
+        {
+            File file = new File(latest.getAbsolutePath() + File.separator + section);
+            if (file.isDirectory())
+            {
+                sections.add(file.getName());
+            }
+        }
+
+        // Add sections, homepage, and index.js
+        total_files += sections.size() + 1 + 1;
+
+        // Do the archive
+        buildSection(new File(path + File.separator + "Archive"), "Archive");
 
         if (!latest.exists() && !latest.isDirectory())
         {
@@ -107,7 +144,7 @@ class MammothStep implements MajorStep
             return 1;
         }
 
-        for (String section : latest.list())
+        for (String section : lisst)
         {
             File file = new File(latest.getAbsolutePath() + File.separator + section);
             System.out.println("Found file: " + file.getAbsolutePath());
@@ -115,8 +152,76 @@ class MammothStep implements MajorStep
             {
                 System.out.println("Entering...");
                 buildSection(file, file.getName());
-                sections.add(file.getName());
             }
+        }
+
+        // Build the home pages
+        TemplateEngine t = TemplateEngine.getInstance();
+        all_cards = new ArrayList<HomeCard>();
+        for (String sec : sections)
+        {
+            String upper_blurb = "";
+            if (!sec.equals("Archive"))
+            {
+                upper_blurb = getUpperBlurb(latest.getAbsolutePath() + File.separator + sec);
+            }
+            String out = t.makeHome(sec, section_cards.get(slugify(sec)), sections, upper_blurb);
+
+            String pt = path + File.separator + "NewSource" + File.separator + "section" + File.separator +
+                        slugify(sec) + File.separator + "index.html";
+
+            try (FileWriter sfr = new FileWriter(pt))
+            {
+                sfr.write(out);
+                sfr.close();
+            }
+            catch (IOException e)
+            {
+                e.printStackTrace();
+            }
+            files_so_far++;
+            f.setProgress((int)(((double)files_so_far / total_files) * 100));
+            o.out("Built homepage for section " + sec + "\n");
+
+            if (slugify(sec).equals("prompts") || slugify(sec).equals("about"))
+                continue;
+
+            all_cards.addAll(section_cards.get(slugify(sec)));
+        }
+
+        o.out("Building homepage\n");
+
+        String upper_blurb = getUpperBlurb(latest.getAbsolutePath());
+        String out = t.makeHome("Home", all_cards, sections, upper_blurb);
+
+        String pt = path + File.separator + "NewSource" + File.separator + "index.html";
+
+        try (FileWriter sfr = new FileWriter(pt))
+        {
+            sfr.write(out);
+            sfr.close();
+        }
+        catch (IOException e)
+        {
+            e.printStackTrace();
+        }
+        files_so_far++;
+        f.setProgress((int)(((double)files_so_far / total_files) * 100));
+        o.out("Built homepage\n");
+
+        // Why is converting a Date to a LocalDate so damn hard!
+        out = t.makeJS("", subd.toInstant().atZone(ZoneId.systemDefault()).toLocalDate());
+
+        pt = path + File.separator + "NewSource" + File.separator + "index.js";
+
+        try (FileWriter sfr = new FileWriter(pt))
+        {
+            sfr.write(out);
+            sfr.close();
+        }
+        catch (IOException e)
+        {
+            e.printStackTrace();
         }
 
         try
@@ -155,7 +260,36 @@ class MammothStep implements MajorStep
         f.setProgress(100);
         o.out("Finished converting files to HTML\n");
 
+        // TODO: Make resources folder actually work when built in a jar
+        // TODO: Move in javascript
+        // TODO: About page and home page heading
+        //  |-> Maybe just give every folder a SECTION file?
+        // TODO: Deploying (this will suck)
+
         return 0;
+    }
+
+    String getUpperBlurb(String pat)
+    {
+        File f = new File(pat + File.separator + "SECTION.docx");
+        if (!f.exists())
+            return "";
+
+        // Mammoth f
+
+        DocumentConverter converter = new DocumentConverter().preserveEmptyParagraphs();
+
+        String result = "";
+        try
+        {
+            result = converter.convertToHtml(f).getValue();
+        }
+        catch (IOException e)
+        {
+            e.printStackTrace();
+        }
+
+        return result;
     }
 
     static void copyDirectory(Path sourcePath, Path destinationPath)
@@ -192,9 +326,20 @@ class MammothStep implements MajorStep
         };
         System.out.println("Entering: " + directory.getAbsolutePath());
         String[] items = directory.list(filter);
+        Arrays.sort(items);
 
         if (items == null)
             return;
+
+        try
+        {
+            section_cards.put(slugify(section), new ArrayList<HomeCard>());
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+        System.out.println("Added thing1");
 
         for (int i = 0; i < items.length; i++)
         {
@@ -205,8 +350,14 @@ class MammothStep implements MajorStep
             {
                 buildSection(file, section);
             }
+            else if (file.getName().endsWith("SECTION.docx"))
+            {
+                // We'll deal with this... later.
+            }
             else if (file.getName().toLowerCase().endsWith(".docx"))
             {
+
+                System.out.println("Building file " + file.getName());
                 buildFile(file, section);
             }
         }
@@ -224,9 +375,20 @@ class MammothStep implements MajorStep
         {
             // Horray!
             // Just move it over
-            File old = new File(old_location);
+            // File old = new File(old_location);
             String new_loc = getNewLocation(file, section);
-            old.renameTo(new File(new_loc));
+            // new File(new_loc).mkdirs();
+            // old.renameTo(new File(new_loc + File.separator + "index.html"));
+            try
+            {
+                Files.move(Path.of(old_location), Path.of(new_loc));
+            }
+            catch (IOException e)
+            {
+                o.out("Failed to re-use\n");
+                e.printStackTrace();
+                return;
+            }
             props.setProperty("mammoth/cache/name/" + file.getAbsoluteFile(), new_loc.replace("NewSource", "Source"));
 
             files_so_far++;
@@ -234,20 +396,100 @@ class MammothStep implements MajorStep
             o.out("Re-using file " + file.getName() + " from cache\n");
             // System.out.println("Re-using");
 
+            // Make the card
+            HomeCard h = new HomeCard();
+            h.title = props.getProperty("mammoth/cache/title/" + file.getAbsoluteFile());
+            h.author = props.getProperty("mammoth/cache/author/" + file.getAbsoluteFile());
+            h.blurb = props.getProperty("mammoth/cache/blurb/" + file.getAbsoluteFile());
+            h.date = LocalDate.parse(props.getProperty("mammoth/cache/date/" + file.getAbsoluteFile()));
+
+            h.has_image = new File(new_loc + File.separator + "0.jpeg").exists();
+            h.image_url = new_loc.replace(path + File.separator + "NewSource", "") + File.separator + "0.jpeg";
+
+            h.url = new_loc.replace(path + File.separator + "NewSource", "");
+
+            section_cards.get(slugify(section)).add(h);
+
             return;
         }
 
+        total_images = 0;
+
+        String new_loc = getNewLocation(file, section);
+        new File(new_loc).mkdirs();
+
         // Actually generate it
-        DocumentConverter converter = new DocumentConverter();
+        Lock l = new ReentrantLock();
+        DocumentConverter converter =
+            new DocumentConverter()
+                .imageConverter(image -> {
+                    l.lock();
+                    long img_num = total_images;
+                    total_images++;
+                    l.unlock();
+                    o.out("Processing image #" + img_num + "\n");
+                    try
+                    {
+                        BufferedImage i = ImageIO.read(image.getInputStream());
+                        String fname = new_loc + File.separator + img_num + ".jpeg";
+
+                        // Create a new BufferedImage with RGB color space
+                        BufferedImage rgbImage =
+                            new BufferedImage(i.getWidth(), i.getHeight(), BufferedImage.TYPE_INT_RGB);
+
+                        // Create a ColorConvertOp to convert from CMYK to RGB
+                        ColorConvertOp op = new ColorConvertOp(null);
+
+                        // Apply the conversion to the original image and store it in the new image
+                        op.filter(i, rgbImage);
+
+                        // Get an ImageWriter instance for JPEG format
+                        Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("JPEG");
+                        ImageWriter writer = writers.next();
+
+                        // Get an ImageWriteParam instance
+                        ImageWriteParam param = writer.getDefaultWriteParam();
+
+                        // Set the compression mode to explicit
+                        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+
+                        // Set the compression quality to 0.6
+                        param.setCompressionQuality(0.6f);
+
+                        // Create an output file
+                        File outputFile = new File(fname);
+                        ImageOutputStream output = ImageIO.createImageOutputStream(outputFile);
+
+                        writer.setOutput(output);
+
+                        // Write the image with the specified parameters
+                        writer.write(rgbImage);
+
+                        // Dispose the writer
+                        writer.dispose();
+                    }
+                    catch (Exception e)
+                    {
+                        o.out("Invalid image");
+                        e.printStackTrace();
+                    }
+                    Map<String, String> attributes = new HashMap<>();
+
+                    // Use absolute path so /<article> and /<article>/<index.html> both work
+                    attributes.put("src", new_loc.replace(path + File.separator + "NewSource", "") + File.separator +
+                                              img_num + ".jpeg");
+                    attributes.put("alt", image.getAltText().orElse(""));
+                    return attributes;
+                })
+                .preserveEmptyParagraphs();
         Result<String> result;
 
         try
         {
             result = converter.convertToHtml(file);
+            String raw = converter.extractRawText(file).getValue();
             String total = result.getValue(); // The generated HTML
             // Set<String> warnings = result.getWarnings(); // Any warnings during conversion
-
-            String new_loc = getNewLocation(file, section);
 
             int in = total.indexOf("---</p>");
             if (in == -1)
@@ -262,23 +504,20 @@ class MammothStep implements MajorStep
 
             try
             {
-                // TODO: This is really, really, really, really slow!!!
                 String header = total.substring(0, in + 7);
                 header = header.replace("<p>", "").replace("</p>", "\n");
                 String[] bits = header.split("\n");
                 String title = bits[0].replace("Title:", "").trim();
                 String author = bits[1].replace("Author:", "").trim();
                 String date = bits[2].replace("Date:", "").trim();
-                // TODO: verify date
 
-                // Properties p = new Properties();
-                // p.setProperty("title", title);
-                // p.setProperty("author", author);
-                // p.setProperty("date", date);
-                // p.setProperty("type", "post");
-                // p.setProperty("status", "published");
+                LocalDate hdate;
+                // if the date doesn't fit this, crash
+                DateTimeFormatter formatter =
+                    DateTimeFormatter.ofPattern("[yyyy-MM-dd][yyyy-M-dd][yyyy-MM-d][yyyy-M-d]");
+                hdate = LocalDate.parse(date, formatter);
 
-                FileWriter writer = new FileWriter(new_loc);
+                FileWriter writer = new FileWriter(new_loc + File.separator + "index.html");
 
                 // create a new string writer
                 StringWriter swriter = new StringWriter();
@@ -288,10 +527,36 @@ class MammothStep implements MajorStep
                 String output = swriter.toString();
                 output = output.substring(output.indexOf("\n") + 1);
                 TemplateEngine ti = TemplateEngine.getInstance();
-                total = ti.makePage(title, author, date, total.substring(in + 7), section, sections);
+                total = ti.makePage(title, author, hdate.toString(), total.substring(in + 7), section, sections);
 
                 writer.append(total);
                 writer.close();
+
+                // Make the card
+                HomeCard h = new HomeCard();
+                h.title = title;
+                h.author = author;
+                int idx = 0;
+                raw = raw.substring(raw.indexOf("---") + 4);
+                for (int i = 0; i < 28; i++)
+                {
+                    idx = raw.indexOf(" ", idx + 1);
+                }
+                String blurb = raw.substring(0, idx == -1 ? raw.length() : idx) + (idx == -1 ? "" : "... ");
+                h.blurb = blurb;
+
+                props.setProperty("mammoth/cache/blurb/" + file.getAbsoluteFile(), blurb);
+                props.setProperty("mammoth/cache/title/" + file.getAbsoluteFile(), title);
+                props.setProperty("mammoth/cache/author/" + file.getAbsoluteFile(), author);
+                props.setProperty("mammoth/cache/date/" + file.getAbsoluteFile(), hdate.toString());
+
+                h.has_image = new File(new_loc + File.separator + "0.jpeg").exists();
+                h.image_url = new_loc.replace(path + File.separator + "NewSource", "") + File.separator + "0.jpeg";
+
+                h.url = new_loc.replace(path + File.separator + "NewSource", "");
+                h.date = hdate;
+
+                section_cards.get(slugify(section)).add(h);
             }
             catch (Exception e)
             {
@@ -329,7 +594,9 @@ class MammothStep implements MajorStep
         if (!p.exists())
             p.mkdirs();
 
-        for (String name : p.list())
+        String[] listt = p.list();
+        Arrays.sort(listt);
+        for (String name : listt)
         {
             if (name == f_slugged)
             {
@@ -349,13 +616,14 @@ class MammothStep implements MajorStep
         }
 
         return path + File.separator + "NewSource" + File.separator + "section" + File.separator + slugify(section) +
-            File.separator + f_slugged + ".html";
+            File.separator + f_slugged;
     }
 
     private int countFiles(File directory)
     {
         int count = 0;
         String[] items = directory.list();
+        Arrays.sort(items);
         for (String f : items)
         {
             File file = new File(directory.getPath() + File.separator + f);
@@ -374,6 +642,8 @@ class MammothStep implements MajorStep
 
     private static final Pattern NONLATIN = Pattern.compile("[^\\w-]");
     private static final Pattern WHITESPACE = Pattern.compile("[\\s]");
+    private long total_images;
+    private ArrayList<HomeCard> all_cards;
 
     public static String slugify(String filename)
     {
