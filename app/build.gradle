@@ -37,6 +37,9 @@ dependencies {
 
     // Zip4j (java's built in zip can die in a hole)
     implementation 'net.lingala.zip4j:zip4j:2.11.5'
+
+    // JGit (for deploying)
+    implementation 'org.eclipse.jgit:org.eclipse.jgit:6.6.0.202305301015-r'
 }
 
 // Apply a specific Java toolchain to ease working on different environments.

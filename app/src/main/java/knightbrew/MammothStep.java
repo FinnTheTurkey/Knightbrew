@@ -261,9 +261,6 @@ class MammothStep implements MajorStep
         o.out("Finished converting files to HTML\n");
 
         // TODO: Make resources folder actually work when built in a jar
-        // TODO: Move in javascript
-        // TODO: About page and home page heading
-        //  |-> Maybe just give every folder a SECTION file?
         // TODO: Deploying (this will suck)
 
         return 0;
@@ -292,7 +289,7 @@ class MammothStep implements MajorStep
         return result;
     }
 
-    static void copyDirectory(Path sourcePath, Path destinationPath)
+    public static void copyDirectory(Path sourcePath, Path destinationPath)
     {
         // Copy the folder recursively
         try

@@ -31,7 +31,7 @@ https://docs.oracle.com/javase/tutorial/uiswing/components/index.html
 public class App extends JPanel implements ActionListener
 {
     protected JButton b1, b2, b3;
-    protected FileBrowse archiveFile, introFile, aboutFile, latestFile;
+    protected FileBrowse archiveFile, introFile, aboutFile, latestFile, outputFile;
     protected JXDatePicker submissionDate;
     private JButton b4;
     private String path;
@@ -55,7 +55,9 @@ public class App extends JPanel implements ActionListener
         step1.setLayout(new BoxLayout(step1, BoxLayout.PAGE_AXIS));
 
         archiveFile = new FileBrowse("Archive folder", BrowseType.Directory);
+        outputFile = new FileBrowse("Output folder", BrowseType.Directory);
         step1.add(archiveFile);
+        step1.add(outputFile);
         introFile = new FileBrowse("Intro heading document", BrowseType.Directory);
         // step1.add(introFile);
 
@@ -121,7 +123,7 @@ public class App extends JPanel implements ActionListener
         b3.setActionCommand("deploy");
         bl = new JPanel(new BorderLayout());
         bl.add(b3);
-        step3.add(bl);
+        // step3.add(bl);
 
         add(step3);
 
@@ -135,6 +137,7 @@ public class App extends JPanel implements ActionListener
         introFile.setPath(prefs.get("intro_file", ""));
         aboutFile.setPath(prefs.get("about_file", ""));
         latestFile.setPath(prefs.get("latest_file", ""));
+        outputFile.setPath(prefs.get("output_file", ""));
         submissionDate.setDate(new Date(prefs.getLong("submission_date", new Date().getTime())));
     }
 
@@ -145,6 +148,7 @@ public class App extends JPanel implements ActionListener
         prefs.put("intro_file", introFile.getPath());
         prefs.put("about_file", aboutFile.getPath());
         prefs.put("latest_file", latestFile.getPath());
+        prefs.put("output_file", outputFile.getPath());
         prefs.putLong("submission_date", submissionDate.getDate().getTime());
     }
 

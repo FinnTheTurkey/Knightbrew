@@ -2,9 +2,13 @@ package knightbrew;
 import java.awt.*;
 import java.awt.event.*;
 import java.beans.*;
+import java.io.File;
+import java.nio.file.Paths;
 import java.util.Date;
-import java.util.Random;
+import java.util.prefs.Preferences;
 import javax.swing.*;
+import net.harawata.appdirs.AppDirs;
+import net.harawata.appdirs.AppDirsFactory;
 
 @FunctionalInterface
 interface ProgressFunction {
@@ -24,36 +28,27 @@ interface MajorStep
               OutputFunction o);
 }
 
-class TestStep implements MajorStep
+class MoveStep implements MajorStep
 {
     @Override public String getName()
     {
-        return "TestStep";
+        return "Moving...";
     }
 
     @Override
     public int start(String archive, String heading, String about, String current, Date subd, ProgressFunction f,
                      OutputFunction o)
     {
-        Random random = new Random();
-        int progress = 0;
-        // Initialize progress property.
         f.setProgress(0);
-        while (progress < 100)
-        {
-            // Sleep for up to one second.
-            try
-            {
-                Thread.sleep(random.nextInt(1000));
-            }
-            catch (InterruptedException ignore)
-            {
-            }
-            // Make random progress.
-            progress += random.nextInt(10);
-            f.setProgress(Math.min(progress, 100));
-            o.out(String.format("At %d%%\n", progress));
-        }
+
+        Preferences prefs = Preferences.userNodeForPackage(App.class);
+        String output_file = prefs.get("output_file", "");
+
+        AppDirs appDirs = AppDirsFactory.getInstance();
+        String path = appDirs.getUserDataDir("Knightbrew", null, "Knightwatch");
+
+        MammothStep.copyDirectory(Paths.get(path + File.separator + "Source"), Paths.get(output_file));
+        o.out("Moved output to given directory!");
         return 0;
     }
 }
@@ -87,6 +82,8 @@ public class Builder extends JPanel implements ActionListener, PropertyChangeLis
                     return null;
 
                 if (runMajorStep(new MammothStep()) != 0)
+                    return null;
+                if (runMajorStep(new MoveStep()) != 0)
                     return null;
             }
             catch (Exception e)
